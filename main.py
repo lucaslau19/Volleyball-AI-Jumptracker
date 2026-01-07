@@ -13,14 +13,14 @@ pose_model = mp_pose.Pose(
 )
 
 # ---- NET HEIGHT CALIBRATION ----
-NET_HEIGHT_CM = 224  # Men's net = 243 cm, Women's net = 224 cm
+NET_HEIGHT_in = 88 # womens net
 net_top_y = None
 net_bottom_y = None
-pixels_per_cm = None
+pixels_per_in = None
 calibration_step = 0  # 0 = click net, 1 = click ground, 2 = done
 
 def mouse_callback(event, x, y, flags, param):
-    global net_top_y, net_bottom_y, pixels_per_cm, calibration_step
+    global net_top_y, net_bottom_y, pixels_per_in, calibration_step
     if event == cv2.EVENT_LBUTTONDOWN:
         if calibration_step == 0:
             net_top_y = y
@@ -29,9 +29,9 @@ def mouse_callback(event, x, y, flags, param):
         elif calibration_step == 1:
             net_bottom_y = y
             net_height_pixels = abs(net_bottom_y - net_top_y)
-            pixels_per_cm = net_height_pixels / NET_HEIGHT_CM
+            pixels_per_in = net_height_pixels / NET_HEIGHT_in
             calibration_step = 2
-            print(f"✓ Calibration complete! {pixels_per_cm:.2f} pixels per cm")
+            print(f"✓ Calibration complete! {pixels_per_in:.2f} pixels per in")
 
 # ---- Open video file ----
 video_path = "volleyball.mp4"
@@ -62,7 +62,7 @@ print("="*60 + "\n")
 # ---- CSV for jump heights ----
 csv_file = open("jump_positions.csv", "w", newline="")
 csv_writer = csv.writer(csv_file)
-csv_writer.writerow(["frame", "jump_height_cm"])
+csv_writer.writerow(["frame", "jump_height_in"])
 
 # ---- Variables ----
 frame_count = 0
@@ -106,7 +106,7 @@ while cap.isOpened():
     image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = pose_model.process(image_rgb)
 
-    jump_height_cm = 0
+    jump_height_in = 0
     
     # Status box background - MOVED TO BOTTOM LEFT
     status_box_y = frame_height - 130
@@ -121,7 +121,7 @@ while cap.isOpened():
         cv2.putText(frame, "STEP 2: Click GROUND", (15, status_box_y + 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
     else:
-        cv2.putText(frame, f"Calibrated: {pixels_per_cm:.2f} px/cm", (15, status_box_y + 20),
+        cv2.putText(frame, f"Calibrated: {pixels_per_in:.2f} px/in", (15, status_box_y + 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 0), 1)
 
     # Pose detection status
@@ -165,7 +165,7 @@ while cap.isOpened():
             
             # Show why jump isn't detected (if movement is significant)
             if abs(ankle_diff) > 0.01:
-                potential_jump_cm = ankle_diff * frame_height * pixels_per_cm if pixels_per_cm else 0
+                potential_jump_in = ankle_diff * frame_height * pixels_per_in if pixels_per_in else 0
                 
                 debug_msg = ""
                 if calibration_step != 2:
@@ -176,12 +176,12 @@ while cap.isOpened():
                     debug_msg = "Already showing jump"
                 elif frames_since_last_jump <= min_frames_between_jumps:
                     debug_msg = f"Cooldown ({frames_since_last_jump}/{min_frames_between_jumps})"
-                elif potential_jump_cm < min_jump_height:
-                    debug_msg = f"Too small ({potential_jump_cm:.1f}cm < {min_jump_height}cm)"
-                elif potential_jump_cm > max_jump_height:
-                    debug_msg = f"Too large ({potential_jump_cm:.1f}cm > {max_jump_height}cm)"
+                elif potential_jump_in < min_jump_height:
+                    debug_msg = f"Too small ({potential_jump_in:.1f}in < {min_jump_height}in)"
+                elif potential_jump_in > max_jump_height:
+                    debug_msg = f"Too large ({potential_jump_in:.1f}in > {max_jump_height}in)"
                 else:
-                    debug_msg = f"Would be: {potential_jump_cm:.1f}cm - SHOULD DETECT!"
+                    debug_msg = f"Would be: {potential_jump_in:.1f}in - SHOULD DETECT!"
                 
                 cv2.putText(frame, debug_msg, (15, status_box_y - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 0), 1)
@@ -193,22 +193,22 @@ while cap.isOpened():
                 frames_since_last_jump > min_frames_between_jumps):  # Cooldown period
                 
                 jump_height_normalized = ankle_diff
-                jump_height_cm = jump_height_normalized * frame_height * pixels_per_cm
+                jump_height_in = jump_height_normalized * frame_height * pixels_per_in
                 
                 # Only count realistic jumps with stricter filtering
-                if min_jump_height <= jump_height_cm <= max_jump_height:
-                    last_jump_height = jump_height_cm
+                if min_jump_height <= jump_height_in <= max_jump_height:
+                    last_jump_height = jump_height_in
                     total_jumps += 1
                     frames_since_last_jump = 0  # Reset cooldown
                     
-                    print(f"🏐 Frame {frame_count}: JUMP #{total_jumps} - {jump_height_cm:.1f} cm")
-                    csv_writer.writerow([frame_count, jump_height_cm])
+                    print(f"Frame {frame_count}: JUMP #{total_jumps} - {jump_height_in:.1f} in")
+                    csv_writer.writerow([frame_count, jump_height_in])
                     jump_display_counter = int(fps * 3)  # Display for 3 seconds
                 else:
-                    print(f"⚠️  Rejected jump: {jump_height_cm:.1f}cm (outside {min_jump_height}-{max_jump_height}cm range)")
+                    print(f"Rejected jump: {jump_height_in:.1f}in (outside {min_jump_height}-{max_jump_height}in range)")
 
         prev_ankle_y = smoothed_ankle_y
-        jump_heights.append(jump_height_cm)
+        jump_heights.append(jump_height_in)
         if len(jump_heights) > 200:
             jump_heights.pop(0)
     else:
@@ -231,7 +231,7 @@ while cap.isOpened():
         # Text
         cv2.putText(frame, "JUMP DETECTED!", (40, 165),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-        cv2.putText(frame, f"Height: {last_jump_height:.1f} cm", (40, 188),
+        cv2.putText(frame, f"Height: {last_jump_height:.1f} in", (40, 188),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         jump_display_counter -= 1
 
@@ -241,7 +241,7 @@ while cap.isOpened():
     graph = np.zeros((graph_height, graph_width, 3), dtype=np.uint8)
 
     if len(jump_heights) > 1 and max(jump_heights) > 0:
-        max_jump = max(max(jump_heights), 50)  # At least 50cm scale
+        max_jump = max(max(jump_heights), 50)  # At least 50in scale
         for i in range(1, len(jump_heights)):
             y1 = graph_height - int((jump_heights[i-1] / max_jump) * graph_height * 0.9)
             y2 = graph_height - int((jump_heights[i] / max_jump) * graph_height * 0.9)
@@ -256,7 +256,7 @@ while cap.isOpened():
 
     # Max jump stat
     if len(jump_heights) > 0 and max(jump_heights) > 0:
-        cv2.putText(frame, f"Max: {max(jump_heights):.1f}cm", (x_offset, y_offset - 5),
+        cv2.putText(frame, f"Max: {max(jump_heights):.1f}in", (x_offset, y_offset - 5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
 
     # Controls reminder
@@ -272,7 +272,7 @@ while cap.isOpened():
         print("⏸ PAUSED - Press any key to continue...")
         cv2.waitKey(0)
     elif key == ord('r') or key == ord('R'):  # R = Reset
-        print("🔄 Tracking reset")
+        print("Tracking reset")
         prev_ankle_y = None
         baseline_ankle_y = None
         ankle_history = []
@@ -288,6 +288,6 @@ print("="*60)
 print(f"Total frames processed: {frame_count}")
 print(f"Total jumps detected: {total_jumps}")
 if len(jump_heights) > 0 and max(jump_heights) > 0:
-    print(f"Maximum jump height: {max(jump_heights):.1f} cm")
+    print(f"Maximum jump height: {max(jump_heights):.1f} in")
 print(f"Results saved to: jump_positions.csv")
 print("="*60)
